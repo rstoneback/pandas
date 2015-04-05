@@ -198,6 +198,22 @@ class _NDFrameIndexer(object):
                                      .format(self.name))
 
         return True
+    # added by RS
+    def _check_set_solitary_element(self, indexer, labels, value):
+        """
+        Check if data to be set is destined for a single element
+        """                            
+        temp = 0
+        if isinstance(indexer[0], slice):
+            if isinstance(indexer[0].start, int) & isinstance(indexer[0].stop,int):
+                temp = indexer[0].stop-indexer[0].start
+                temp = temp if indexer[0].step is None else temp//indexer[0].step
+        elif isinstance(indexer[0], int):
+            temp = 1
+        if (temp == 1) & (not isinstance(labels[0], tuple)):
+            if self.obj[labels[0]].dtype == np.dtype('O'):
+                return True
+        return False
 
     def _setitem_with_indexer(self, indexer, value):
 
@@ -434,11 +450,15 @@ class _NDFrameIndexer(object):
                 # we have an equal len Frame
                 if isinstance(value, ABCDataFrame) and value.ndim > 1:
 
-                    for item in labels:
-                        # align to
-                        v = np.nan if item not in value else \
-                                self._align_series(indexer[0], value[item])
-                        setter(item, v)
+                    if self._check_set_solitary_element(indexer, labels, value):
+                        setter(labels[0],value)
+                    else:
+                        for item in labels:
+                            # align to
+                            v = np.nan if item not in value else \
+                                    self._align_series(indexer[0], value[item])
+                            setter(item, v)
+                        
 
                 # we have an equal len ndarray/convertible to our labels
                 elif np.array(value).ndim == 2:
@@ -463,11 +483,15 @@ class _NDFrameIndexer(object):
                 else:
 
                     if len(labels) != len(value):
-                        raise ValueError('Must have equal len keys and value '
+                        # if added by RS
+                        if self._check_set_solitary_element(indexer, labels, value):
+                            setter(labels[0],value)
+                        else:
+                            raise ValueError('Must have equal len keys and value '
                                          'when setting with an iterable')
-
-                    for item, v in zip(labels, value):
-                        setter(item, v)
+                    else:    # else added by RS
+                        for item, v in zip(labels, value):
+                            setter(item, v)
             else:
 
                 # scalar
@@ -596,7 +620,15 @@ class _NDFrameIndexer(object):
                         ser = ser.T
 
                     return ser
+                # added by RS
+                else:
 
+                    if i == (len(indexer)-1):
+                        # program has exhausted options and is 
+                        # about to raise error, trying to 
+                        # support adding Series/Frame to single elements of 
+                        # Series/Frame
+                        return ser
         elif np.isscalar(indexer):
             ax = self.obj._get_axis(1)
 
